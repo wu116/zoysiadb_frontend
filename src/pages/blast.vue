@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import axios from 'axios'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
+
+axios.defaults.xsrfHeaderName = "X-CSRFToken";
+axios.defaults.xsrfCookieName = "csrftoken";
+axios.defaults.withCredentials = true;  // 允许携带Cookie
 
 // 定义数据框
 const textarea1 = ref('')
@@ -25,25 +29,65 @@ const textarea1rules = {
 }
 
 // 定义数据库选项
-const DBvalue = ref('CDS')
-const DBoptions = [
-  {
-    DBvalue: 'genome',
-    label: 'genome',
-  },
-  {
-    DBvalue: 'mRNA',
-    label: 'mRNA',
-  },
-  {
-    DBvalue: 'CDS',
-    label: 'CDS',
-  },
-  {
-    DBvalue: 'protein',
-    label: 'protein',
-  },
-]
+// const DBvalue = ref('CDS')
+// const DBoptions = [
+//   {
+//     DBvalue: 'genome',
+//     label: 'genome',
+//   },
+//   {
+//     DBvalue: 'mRNA',
+//     label: 'mRNA',
+//   },
+//   {
+//     DBvalue: 'CDS',
+//     label: 'CDS',
+//   },
+//   {
+//     DBvalue: 'protein',
+//     label: 'protein',
+//   },
+// ]
+const DBvalue = ref('');
+const dbOptions = ref<
+  { label: string; options: { DBvalue: string; label: string }[] }[]
+>([]);
+const dbTypeMap = ref<Record<string, string>>({});
+const fetchDBOptions = async () => {
+  try {
+    const response = await axios.get('/api/blastapi/get_blastdb/');
+    // 将数据映射为下拉选项格式
+    const groups: Record<string, { DBvalue: string; label: string }[]> = {};
+    const typeMap: Record<string, string> = {};
+    response.data.forEach((item: { file_type: string; file_name: string }) => {
+      if (!groups[item.file_type]) {
+        groups[item.file_type] = [];
+      }
+      groups[item.file_type].push({
+        DBvalue: item.file_name,
+        label: item.file_name
+      });
+      typeMap[item.file_name] = item.file_type;
+    });
+
+    dbOptions.value = Object.entries(groups).map(([type, options]) => ({
+      label: type,
+      options: options
+    }));
+    dbTypeMap.value = typeMap;
+  } catch (error) {
+    console.error('获取数据库选项失败:', error);
+  }
+};
+
+// 初始化时加载
+onMounted(() => {
+  fetchDBOptions().then(() => {
+    if (dbOptions.value.length > 0 && dbOptions.value[0].options.length > 0) {
+      DBvalue.value = dbOptions.value[0].options[0].DBvalue;
+    }
+  });
+});
 
 // 定义比对软件选项
 const Programvalue = ref('blastn')
@@ -70,8 +114,9 @@ const Programoptions = [
   },
 ]
 const avProgramoptions = computed(() => {
+  const dbType = dbTypeMap.value[DBvalue.value];
   return Programoptions.map(option => {
-    if (DBvalue.value === 'protein') {
+    if (dbType === 'protein') {
       // 当数据库为 protein 时，只允许 blastp 和 tblastn
       return {
         ...option,
@@ -89,12 +134,13 @@ const avProgramoptions = computed(() => {
 
 // 监听数据库变化，自动清除非法选项
 watch(DBvalue, (newDB) => {
-  const allowedPrograms = newDB === 'protein' 
+  const dbType = dbTypeMap.value[newDB];
+  const allowedPrograms = dbType === 'protein' 
     ? ['blastp', 'tblastn'] 
     : ['blastn', 'blastx', 'tblastx']
   
   if (!allowedPrograms.includes(Programvalue.value)) {
-    Programvalue.value = '' // 清除不符合条件的值
+    Programvalue.value = allowedPrograms[0]; // 清除不符合条件的值
   }
 })
 
@@ -104,7 +150,9 @@ const num = ref(25)
 // example事件
 const handleexample = () => {
   const exampleHeader = ">Zj13G009140.mRNA1\n" // 公共的FASTA头部
-  const isProteinDB = ["protein"].includes(DBvalue.value)
+  const isProteinDB = computed(() => {
+    return dbTypeMap.value[DBvalue.value] === 'protein';
+  });
 
   // 根据选择的程序类型设置不同示例序列
   textarea1.value = exampleHeader + (
@@ -152,9 +200,13 @@ const handleClear = () => {
 // 重置事件
 const handleReset = () => {
   textarea1.value = ''; // 直接清空 textarea 内容
-  DBvalue.value = 'CDS';   // 重置数据库选择
+  // 重置数据库选择，确保取第一个分组的第一个选项
+  if (dbOptions.value.length > 0 && dbOptions.value[0].options.length > 0) {
+    DBvalue.value = dbOptions.value[0].options[0].DBvalue;
+  }
+
   Programvalue.value = 'blastn'; // 重置比对软件选择
-  num.value = 25;       // 重置 evalue 值
+  num.value = 25; // 重置 evalue 值
 };
 
 // submit验证
@@ -182,15 +234,23 @@ const handleSubmit = async () => {
     const body = lines.slice(1).filter(line => line.trim() !== '') // 过滤空行
 
     // 发送到后端（示例使用 axios）
-    await axios.post('/api/submit', {
-      header,
-      body: body.join('\n') // 或直接传递数组
+    const blastresponse = await axios.post('/api/blastapi/blast/', {
+      header: header,
+      body: body.join('\n'), // 或直接传递数组
+      db: DBvalue.value,
+      program: Programvalue.value,
+      evalue: `1e-${num.value}`
     })
 
     // 清空表单（可选）
     textarea1.value = ''
+    console.log('Results:', blastresponse.data)
   } catch (error) {
-    console.error('提交失败:', error)
+    if (error instanceof Error) {
+      console.log(error.message);
+    } else {
+      console.log("Unknown error:", error);
+    }
   }
 }
 </script>
@@ -211,12 +271,18 @@ const handleSubmit = async () => {
                 <!-- 选择数据库 -->
                 Database:
                 <el-select v-model="DBvalue" placeholder="Select" style="width: 120px">
-                  <el-option
-                    v-for="item in DBoptions"
-                    :key="item.DBvalue"
-                    :label="item.label"
-                    :value="item.DBvalue"
-                  />
+                  <el-option-group
+                    v-for="group in dbOptions"
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option
+                      v-for="option in group.options"
+                      :key="option.DBvalue"
+                      :label="option.label"
+                      :value="option.DBvalue"
+                    />
+                  </el-option-group>
                 </el-select>
                 <!-- 选择比对软件 -->
                 Program:
