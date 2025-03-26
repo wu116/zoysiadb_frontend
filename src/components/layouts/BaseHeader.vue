@@ -12,23 +12,23 @@ import { toggleDark } from '~/composables'
         <span>ZoysiaGenomeDataBase</span>
       </div>
     </el-menu-item>
-    <el-sub-menu index="nav/Overview">
+    <el-sub-menu index="/nav/Overview">
       <template #title>
         Overview
       </template>
-      <el-sub-menu index="nav/Overview-1">
+      <el-sub-menu index="/nav/Overview-1">
         <template #title>
           Overview-1
         </template>
-        <el-menu-item index="nav/Overview-1/Overview-1-1">
+        <el-menu-item index="/nav/Overview-1/Overview-1-1">
           item one
         </el-menu-item>
       </el-sub-menu>
-      <el-menu-item index="nav/Overview-2">
+      <el-menu-item index="/nav/Overview-2">
         item two
       </el-menu-item>
     </el-sub-menu>
-    <el-menu-item index="blast">
+    <el-menu-item index="/blast">
       BLAST
     </el-menu-item>
 
