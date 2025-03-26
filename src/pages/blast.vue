@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import axios from 'axios'
 import { computed, ref, watch, onMounted } from 'vue'
+import { ElLoading } from 'element-plus'
 
 axios.defaults.xsrfHeaderName = "X-CSRFToken";
 axios.defaults.xsrfCookieName = "csrftoken";
@@ -150,10 +151,8 @@ const num = ref(25)
 // example事件
 const handleexample = () => {
   const exampleHeader = ">Zj13G009140.mRNA1\n" // 公共的FASTA头部
-  const isProteinDB = computed(() => {
-    return dbTypeMap.value[DBvalue.value] === 'protein';
-  });
-
+  const dbType = dbTypeMap.value[DBvalue.value];
+  const isProteinDB = dbType === 'protein'
   // 根据选择的程序类型设置不同示例序列
   textarea1.value = exampleHeader + (
     isProteinDB ? 
@@ -228,6 +227,14 @@ const isSubmitEnabled = computed(() => {
 // sumbit事件
 const handleSubmit = async () => {
   try {
+    // 开启 loading
+    const loading = ElLoading.service({
+      lock: true,
+      text: 'Running BLAST, please wait...',
+      background: 'rgba(0, 0, 0, 0.7)',
+      fullscreen: true, 
+    });
+    
     // 分割数据
     const lines = textarea1.value.split('\n')
     const header = lines[0].replace('>', '').trim() // 提取 ">" 后的内容
@@ -245,6 +252,69 @@ const handleSubmit = async () => {
     // 清空表单（可选）
     textarea1.value = ''
     console.log('Results:', blastresponse.data)
+    setTimeout(() => {
+      loading.close()
+    }, 1000)
+
+    // 1. 生成新页面 HTML 内容
+    interface BlastResult {
+      qseqid: string;
+      sseqid: string;
+      pident: number;
+      evalue: number;
+      bitscore: number;
+    }
+    const results: BlastResult[] = blastresponse.data.results
+    const htmlRows = results.map(item => `
+      <tr>
+        <td>${item.qseqid}</td>
+        <td>${item.sseqid}</td>
+        <td>${item.pident}</td>
+        <td>${item.evalue}</td>
+        <td>${item.bitscore}</td>
+      </tr>
+    `).join('')
+
+    // 2. 打开新窗口并写入内容
+    const newWindow = window.open('', '_blank')
+    if(newWindow){
+      const htmlContent = `
+        <html>
+          <head>
+            <title>BLAST 结果</title>
+            <style>
+              body { font-family: Arial; padding: 20px; }
+              table { border-collapse: collapse; width: 100%; }
+              th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+            </style>
+          </head>
+          <body>
+            <h2>BLAST Search Results</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Query ID</th>
+                  <th>Subject ID</th>
+                  <th>% Identity</th>
+                  <th>E-value</th>
+                  <th>Bit Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${htmlRows}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `
+      newWindow.document.write(htmlContent)
+      newWindow.document.close()
+    } else {
+      console.error('Cannot open new Window, might be intercepted by browser.')
+    }
+
+
   } catch (error) {
     if (error instanceof Error) {
       console.log(error.message);
@@ -266,11 +336,11 @@ const handleSubmit = async () => {
         <el-main>
           <!-- 选项 -->
           <el-row>
-            <el-col :span="18" :offset="1">
+            <el-col :span="22" :offset="1">
               <div class="flex gap-4 items-center">
                 <!-- 选择数据库 -->
                 Database:
-                <el-select v-model="DBvalue" placeholder="Select" style="width: 120px">
+                <el-select v-model="DBvalue" placeholder="Select" style="width: 180px">
                   <el-option-group
                     v-for="group in dbOptions"
                     :key="group.label"
@@ -352,12 +422,18 @@ const handleSubmit = async () => {
           </el-row>
         </el-main>
         <!-- 侧栏备注 -->
-        <el-aside width="40%">
-          NOTE:
-          <br>
-          blastn
-          <br>
-          blastp
+        <el-aside width="20%">
+          <div class="flex" style="text-align: left;">
+            NOTE:
+            <br>
+            *.genome: entire assembly sequences
+            <br>
+            *.mrna: transcript sequences
+            <br>
+            *.cds: coding sequences
+            <br>
+            *.pep: protein sequences
+          </div>
         </el-aside>
       </el-container>
     </el-container>
