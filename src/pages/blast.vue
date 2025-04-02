@@ -261,6 +261,11 @@ const handleSubmit = async () => {
       qseqid: string;
       sseqid: string;
       pident: number;
+      length: number;
+      qstart: number;
+      qend: number;
+      sstart: number;
+      send: number;
       evalue: number;
       bitscore: number;
     }
@@ -270,6 +275,11 @@ const handleSubmit = async () => {
         <td>${item.qseqid}</td>
         <td>${item.sseqid}</td>
         <td>${item.pident}</td>
+        <td>${item.length}</td>
+        <td>${item.qstart}</td>
+        <td>${item.qend}</td>
+        <td>${item.sstart}</td>
+        <td>${item.send}</td>
         <td>${item.evalue}</td>
         <td>${item.bitscore}</td>
       </tr>
@@ -297,6 +307,11 @@ const handleSubmit = async () => {
                   <th>Query ID</th>
                   <th>Subject ID</th>
                   <th>% Identity</th>
+                  <th>alignment length</th>
+                  <th>Query start</th>
+                  <th>Query end</th>
+                  <th>Subject start</th>
+                  <th>Subject end</th>
                   <th>E-value</th>
                   <th>Bit Score</th>
                 </tr>
